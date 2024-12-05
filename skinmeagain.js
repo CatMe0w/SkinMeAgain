@@ -3,11 +3,18 @@ import { decodeBase64 } from "jsr:@std/encoding";
 
 const app = new Hono();
 
+class SkinApiBadResponse extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "SkinApiError";
+  }
+}
+
 // Mojang API
 async function getUuidFromMojang(username) {
   const uuidResponse = await fetch(`https://api.mojang.com/users/profiles/minecraft/${username}`);
   if (!uuidResponse.ok) {
-    throw new Error(`Mojang API: Username not found: ${uuidResponse.statusText}`);
+    throw new SkinApiBadResponse(`Mojang API: Username not found: ${uuidResponse.statusText}`);
   }
   const uuidData = await uuidResponse.json();
   return uuidData.id;
@@ -16,7 +23,7 @@ async function getUuidFromMojang(username) {
 async function getMetadataFromMojang(uuid) {
   const profileResponse = await fetch(`https://sessionserver.mojang.com/session/minecraft/profile/${uuid}`);
   if (!profileResponse.ok) {
-    throw new Error(`Mojang sessionserver: Failed to retrieve profile: ${profileResponse.statusText}`);
+    throw new SkinApiBadResponse(`Mojang sessionserver: Failed to retrieve profile: ${profileResponse.statusText}`);
   }
   const profileData = await profileResponse.json();
   const texturesBase64 = profileData.properties.find((prop) => prop.name === "textures").value;
@@ -27,7 +34,7 @@ async function getMetadataFromMojang(uuid) {
 async function getMetadataFromCustomSkinApi(username, rootUrl) {
   const response = await fetch(`${rootUrl}/${username}.json`);
   if (!response.ok) {
-    throw new Error(`CustomSkinAPI: Username not found in ${rootUrl}: ${response.statusText}`);
+    throw new SkinApiBadResponse(`CustomSkinAPI: Username not found in ${rootUrl}: ${response.statusText}`);
   }
   const data = await response.json();
   return data;
@@ -36,7 +43,7 @@ async function getMetadataFromCustomSkinApi(username, rootUrl) {
 async function getTextureFromCustomSkinApi(rootUrl, textureId) {
   const textureResponse = await fetch(`${rootUrl}/textures/${textureId}`);
   if (!textureResponse.ok) {
-    throw new Error(`CustomSkinAPI: Failed to retrieve texture from ${rootUrl}: ${textureResponse.statusText}`);
+    throw new SkinApiBadResponse(`CustomSkinAPI: Failed to retrieve texture from ${rootUrl}: ${textureResponse.statusText}`);
   }
   return textureResponse;
 }
@@ -45,7 +52,7 @@ async function getTextureFromCustomSkinApi(rootUrl, textureId) {
 async function getMeatdataFromElyByApi(username, rootUrl) {
   const response = await fetch(`${rootUrl}/${username}`);
   if (!response.ok) {
-    throw new Error(`ElyByAPI: Failed to retrieve ${type} for ${username} from ${rootUrl}: ${response.statusText}`);
+    throw new SkinApiBadResponse(`ElyByAPI: Username not found in ${rootUrl}: ${response.statusText}`);
   }
   const data = await response.json();
   return data;
@@ -53,15 +60,21 @@ async function getMeatdataFromElyByApi(username, rootUrl) {
 
 // Get skin or cape texture for a given username
 async function getTexture(username, textureType) {
-  let uuid = await getUuidFromMojang(username);
-  if (uuid) {
-    const metadata = await getMetadataFromMojang(uuid);
-    if (metadata) {
-      if (textureType === "skin" && metadata.textures.SKIN) {
-        return await fetch(metadata.textures.SKIN.url);
-      } else if (textureType === "cape" && metadata.textures.CAPE) {
-        return await fetch(metadata.textures.CAPE.url);
+  try {
+    let uuid = await getUuidFromMojang(username);
+    if (uuid) {
+      const metadata = await getMetadataFromMojang(uuid);
+      if (metadata) {
+        if (textureType === "skin" && metadata.textures.SKIN) {
+          return await fetch(metadata.textures.SKIN.url);
+        } else if (textureType === "cape" && metadata.textures.CAPE) {
+          return await fetch(metadata.textures.CAPE.url);
+        }
       }
+    }
+  } catch (error) {
+    if (!(error instanceof SkinApiBadResponse)) {
+      throw error;
     }
   }
 
@@ -69,18 +82,26 @@ async function getTexture(username, textureType) {
   const customSkinApis = ["https://littleskin.cn/csl", "https://skin.prinzeugen.net"];
 
   for (const api of customSkinApis) {
-    const metadata = await getMetadataFromCustomSkinApi(username, api);
-    console.log(metadata);
-    if (metadata) {
-      let textureId = "";
-      if (textureType === "skin") {
-        textureId = metadata.skins.default || metadata.skins.slim;
-      } else if (textureType === "cape") {
-        textureId = metadata.cape;
+    try {
+      const metadata = await getMetadataFromCustomSkinApi(username, api);
+      console.log(metadata);
+      if (metadata) {
+        let textureId = "";
+        if (textureType === "skin") {
+          textureId = metadata.skins.default || metadata.skins.slim;
+        } else if (textureType === "cape") {
+          textureId = metadata.cape;
+        }
+        if (textureId) {
+          const textureResponse = await getTextureFromCustomSkinApi(api, textureId);
+          if (textureResponse) return textureResponse;
+        }
       }
-      if (textureId) {
-        const textureResponse = await getTextureFromCustomSkinApi(api, textureId);
-        if (textureResponse) return textureResponse;
+    } catch (error) {
+      if (error instanceof SkinApiBadResponse) {
+        continue;
+      } else {
+        throw error;
       }
     }
   }
@@ -89,14 +110,22 @@ async function getTexture(username, textureType) {
   const elyByApis = ["http://skinsystem.ely.by/textures", "https://auth.tlauncher.org/skin/profile/texture/login"];
 
   for (const api of elyByApis) {
-    const metadata = await getMeatdataFromElyByApi(username, api);
-    if (metadata) {
-      if (textureType === "skin" && metadata.SKIN) {
-        const url = metadata.SKIN.url.replace("ely.by/minecraft/", "ely.by/storage/"); // what the fuck?
-        return await fetch(url);
-      } else if (textureType === "cape" && metadata.CAPE) {
-        const url = metadata.CAPE.url.replace("ely.by/minecraft/", "ely.by/storage/");
-        return await fetch(url);
+    try {
+      const metadata = await getMeatdataFromElyByApi(username, api);
+      if (metadata) {
+        if (textureType === "skin" && metadata.SKIN) {
+          const url = metadata.SKIN.url.replace("ely.by/minecraft/", "ely.by/storage/"); // what the fuck?
+          return await fetch(url);
+        } else if (textureType === "cape" && metadata.CAPE) {
+          const url = metadata.CAPE.url.replace("ely.by/minecraft/", "ely.by/storage/");
+          return await fetch(url);
+        }
+      }
+    } catch (error) {
+      if (error instanceof SkinApiBadResponse) {
+        continue;
+      } else {
+        throw error;
       }
     }
   }
@@ -146,6 +175,7 @@ app.get("/*", async (c) => {
 
   try {
     const textureResponse = await getTexture(username, textureType);
+
     if (!textureResponse) {
       return c.text("Texture not found", 404);
     }
