@@ -153,7 +153,8 @@ app.get("/*", async (c) => {
     return c.body(textureResponse.body, 200, {
       "Content-Type": "image/png",
       "Cache-Control": "public, max-age=86400",
-      "X-Hello-From-SkinMeAgain": "https://github.com/CatMe0w/SkinMeAgain"
+      "X-Hello-From-SkinMeAgain": "https://github.com/CatMe0w/SkinMeAgain",
+      "X-SkinMeAgain-Hit-Source": textureResponse.url,
     });
   } catch (error) {
     return c.text(`An error occurred: ${error.message}`, 500);
