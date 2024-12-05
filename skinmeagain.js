@@ -112,8 +112,8 @@ app.get("/*", async (c) => {
   const url = new URL(c.req.url);
   const hostname = url.hostname;
   const pathname = url.pathname;
-  let textureType = "skin";
 
+  let textureType = "";
   let username = "";
 
   if (hostname === "skins.logincraft.net" && pathname.startsWith("/g.php")) {
@@ -127,6 +127,12 @@ app.get("/*", async (c) => {
     const matches = decodedString.match(/.*?([a-zA-Z0-9_]+)$/);
     if (matches) {
       username = matches[1];
+    }
+    if (decodedString.startsWith("MDswOzE")) {
+      textureType = "skin";
+    }
+    if (decodedString.startsWith("MDsxOzE")) {
+      textureType = "cape";
     }
   }
 
