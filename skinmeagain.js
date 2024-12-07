@@ -133,9 +133,10 @@ async function getTexture(username, textureType) {
   return null;
 }
 
-app.get("/", async (c) => {
-  return c.redirect("https://github.com/CatMe0w/SkinMeAgain");
-});
+// catch these as they appeared in history:
+// http://www.logincraft.net/skin/ (from https://archive.mcbbs.run/thread.html?t=167381)
+// http://open.mcmyskin.com/download/ (from https://det-hmqc.souluntan.com/t4-topic)
+app.on("GET", ["/", "/index*", "/skin*", "/download*"], async (c) => c.redirect("https://github.com/CatMe0w/SkinMeAgain"));
 
 app.get("/*", async (c) => {
   const url = new URL(c.req.url);
@@ -146,23 +147,25 @@ app.get("/*", async (c) => {
   let username = "";
 
   if (hostname === "skins.logincraft.net" && pathname.startsWith("/g.php")) {
+    // example: https://skins.logincraft.net/g.php?t=skin&u=CatMe0w
     username = url.searchParams.get("u");
     textureType = url.searchParams.get("t");
-  }
-
-  if (hostname === "www.mcmyskin.com") {
+  } else if (hostname === "www.mcmyskin.com" && pathname.startsWith("/MDs")) {
+    // example: https://www.mcmyskin.com/MDswOzE-3d+CatMe0w.png
     const base64AndUsername = pathname.slice(1).replace(".png", "");
     const decodedString = decodeURIComponent(base64AndUsername);
-    const matches = decodedString.match(/.*?([a-zA-Z0-9_]+)$/);
-    if (matches) {
-      username = matches[1];
-    }
-    if (decodedString.startsWith("MDswOzE")) {
+
+    if (decodedString.startsWith("MDswOzE-3d")) {
       textureType = "skin";
+      username = decodedString.slice(11); // catch "MDswOzE-3d+" or "MDswOzE-3d%20"
     }
-    if (decodedString.startsWith("MDsxOzE")) {
+
+    if (decodedString.startsWith("MDsxOzE-3d")) {
       textureType = "cape";
+      username = decodedString.slice(11);
     }
+  } else {
+    return c.text("404 Not Found", 404);
   }
 
   if (!username) {
