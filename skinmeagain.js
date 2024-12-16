@@ -84,7 +84,6 @@ async function getTexture(username, textureType) {
   for (const api of customSkinApis) {
     try {
       const metadata = await getMetadataFromCustomSkinApi(username, api);
-      console.log(metadata);
       if (metadata) {
         let textureId = "";
         if (textureType === "skin") {
