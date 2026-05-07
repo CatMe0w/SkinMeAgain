@@ -135,7 +135,8 @@ async function getTexture(username, textureType) {
 // catch these as they appeared in history:
 // http://www.logincraft.net/skin/ (from https://archive.mcbbs.run/thread.html?t=167381)
 // http://open.mcmyskin.com/download/ (from https://det-hmqc.souluntan.com/t4-topic)
-app.on("GET", ["/", "/index*", "/skin*", "/download*"], async (c) => c.redirect("https://github.com/CatMe0w/SkinMeAgain"));
+// http://www.logincraft.net/forum.php (from https://www.youtube.com/watch?v=tBAak4p5vFM)
+app.on("GET", ["/", "/index*", "/skin*", "/download*", "/forum*"], async (c) => c.redirect("https://github.com/CatMe0w/SkinMeAgain"));
 
 app.get("/*", async (c) => {
   const url = new URL(c.req.url);
